@@ -1,3 +1,4 @@
+import os
 from emails import send_email
 from typing import List
 from passlib.context import CryptContext
@@ -32,32 +33,38 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 @app.post("/users/", response_model=schemas.User, tags=["User"])
 async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    print("this is the create user")
+
     db_user = crud.get_user_by_email(db, email=user.email)
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     user = crud.create_user(db=db, user=user)
-    await send_email([user.email], models.User)
+    await send_email([user.email], user)
+    return user
 
 
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=os.path.abspath(os.path.expanduser("templates")))
 
 
-@app.get("/verification", response_class=HTMLResponse)
-async def email_verfication(request: Request, token: str):
-    user = await crud.verify_token(token)
-    if user and not user.is_verifed:
+@app.get("/verification", response_class=HTMLResponse, tags=["Authentication"])
+async def email_verfication(request: Request, id: int, db: Session = Depends(get_db)):
+    print(email_verfication)
+    user = await crud.verify_token(id, db)
+    print(user)
+    if user and not user.is_active:
         user.is_active = True
-        await user.save()
+        db.add(user)
+        db.commit()
         return templates.TemplateResponse(
-            "verification.html", {"request": request, "username": user.full_name}
+            "verification.html",
+            context={"request": request, "username": user.full_name},
         )
-    raise HTTPException(status_code=401, details="unauthorised")
+
+    raise HTTPException(status_code=401, detail="Email already verified")
 
 
-@app.get("/login", response_model=schemas.Token, tags=["User"])
+@app.post("/login", tags=["Authentication"])
 def login_user(form_data: OAuth2PasswordRequestForm = Depends()):
-    return {"access_token": form_data.username, "token_type": "bearer"}
+    return {"access_token": form_data.username + "token"}
 
 
 @app.get("/users/", response_model=List[schemas.User], tags=["User"])

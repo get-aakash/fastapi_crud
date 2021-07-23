@@ -36,15 +36,16 @@ conf = ConnectionConfig(
 
 
 async def send_email(email: List, instance: User):
-    token_data = {"id": instance.id, "full_name": instance.full_name}
-    token = jwt.encode(token_data, config_credentials["SECRET"], algorithm=["HS256"])
+    id = instance.id
 
-    template = """
+    # token = jwt.encode(token_data, config_credentials["SECRET"], algorithm=["HS256"])
+
+    template = f"""
         <html>
         <body>
         <p>Hi !!!
         <br>Thanks for using fastapi mail, keep using it..!!!</p>
-        <a href="http://localhost:8000/verification/">Verify your email</a>
+        <a href="http://localhost:8000/verification/?id={id}">Verify your email</a>
         </body>
         </html>
         """

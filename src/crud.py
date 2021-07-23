@@ -1,6 +1,6 @@
 from emails import send_email
 from fastapi.exceptions import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, session
 from passlib.context import CryptContext
 from . import models, schemas
 import jwt
@@ -16,13 +16,10 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-async def verify_token(token: str):
-    try:
-        payload = jwt.decode(token, config_credentials["SECRET"])
-        user = await models.User.get(id=payload.get("id"))
-
-    except:
-        raise HTTPException(status_code=404, detail="Invalid username or password")
+async def verify_token(id: str, db: Session):
+    print("verify user")
+    user = db.query(models.User).filter(models.User.id == id).first()
+    print(user)
     return user
 
 
