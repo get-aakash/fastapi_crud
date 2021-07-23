@@ -6,6 +6,7 @@ from . import models, schemas
 import jwt
 from dotenv import dotenv_values
 from fastapi import status
+from fastapi.encoders import jsonable_encoder
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -105,3 +106,10 @@ def update_item(db: Session, item_id: int, item: schemas.ItemCreate):
     db.commit()
     db.refresh(update_items)
     return update_items
+
+
+def pass_user(db: Session, username):
+    user_value = db.query(models.User).filter(models.User.full_name == username).first()
+    user_dict = jsonable_encoder(user_value)
+    current_user = schemas.User(**user_dict)
+    return current_user

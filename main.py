@@ -104,6 +104,35 @@ def login_user(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("user")
+        if username is None:
+            raise credentials_exception
+        token_data = schemas.TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    current_user = crud.pass_user(db, username=token_data.username)
+    print(current_user)
+    if current_user is None:
+        raise credentials_exception
+    return current_user
+
+
+@app.get("/user/me", response_model=schemas.User, tags=["User"])
+def view_user_profile(current_user: schemas.User = Depends(get_current_user)):
+    return current_user
+
+
 @app.get("/users/", response_model=List[schemas.User], tags=["User"])
 def read_users(
     skip: int = 0,
