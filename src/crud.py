@@ -16,6 +16,10 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
+def check_password(password, hash_password) -> str:
+    return pwd_context.verify(password, hash_password)
+
+
 async def verify_token(id: str, db: Session):
     print("verify user")
     user = db.query(models.User).filter(models.User.id == id).first()
@@ -33,6 +37,10 @@ def get_users(db: Session, skip: int = 0, limit: int = 100):
 
 def get_user(db: Session, user_id: int):
     return db.query(models.User).filter(models.User.id == user_id).first()
+
+
+def get_user_by_username(db, username: str):
+    return db.query(models.User).filter(models.User.full_name == username).first()
 
 
 def create_user(db: Session, user: schemas.UserCreate):

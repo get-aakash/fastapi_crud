@@ -1,8 +1,9 @@
 import os
 from emails import send_email
-from typing import List
+from typing import List, Optional
+from datetime import datetime, timedelta
 from passlib.context import CryptContext
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
@@ -14,6 +15,9 @@ from re import template
 from email import *
 
 
+SECRET_KEY = "96ef2d27f39d6a6f4a919495b097b841051f30b0fad4aed2c30069671bc9c70a"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
@@ -29,6 +33,17 @@ def get_db():
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 
 @app.post("/users/", response_model=schemas.User, tags=["User"])
@@ -63,8 +78,30 @@ async def email_verfication(request: Request, id: int, db: Session = Depends(get
 
 
 @app.post("/login", tags=["Authentication"])
-def login_user(form_data: OAuth2PasswordRequestForm = Depends()):
-    return {"access_token": form_data.username + "token"}
+def login_user(
+    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+):
+    user_value = crud.get_user_by_username(db, form_data.username)
+    username = user_value.full_name
+    password = user_value.hashed_password
+    verify_password = crud.check_password(form_data.password, password)
+    if not username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Username is incorrect",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not verify_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="password is incorrect",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"user": username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.get("/users/", response_model=List[schemas.User], tags=["User"])
@@ -80,7 +117,11 @@ def read_users(
 
 
 @app.get("/user/{user_id}", response_model=schemas.User, tags=["User"])
-def read_user(user_id: int, db: Session = Depends(get_db)):
+def read_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
     print("this is the read user")
     db_user = crud.get_user(db=db, user_id=user_id)
     if db_user is None:
@@ -89,7 +130,11 @@ def read_user(user_id: int, db: Session = Depends(get_db)):
 
 
 @app.delete("/users/{user_id}", tags=["User"])
-def delete_user(user_id: int, db: Session = Depends(get_db)):
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
     db_delete = crud.delete_user(db=db, user_id=user_id)
     if db_delete is None:
         raise HTTPException(status_code=404, detail="User not deleted")
@@ -103,6 +148,7 @@ def update_user(
     new_email: str,
     new_full_name: str,
     db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
 ):
     update_user = crud.update_user(
         db=db,
@@ -117,7 +163,12 @@ def update_user(
 
 
 @app.post("/users/{user_id}/posts", response_model=schemas.Item, tags=["Item"])
-def create_item(user_id: int, item: schemas.ItemCreate, db: Session = Depends(get_db)):
+def create_item(
+    user_id: int,
+    item: schemas.ItemCreate,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
     db_user = crud.get_user(db=db, user_id=user_id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="user does not exist")
@@ -125,13 +176,22 @@ def create_item(user_id: int, item: schemas.ItemCreate, db: Session = Depends(ge
 
 
 @app.get("/items", response_model=List[schemas.Item], tags=["Item"])
-def get_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_items(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
     items = crud.get_items(db, skip=skip, limit=limit)
     return items
 
 
 @app.get("/item/{item_id}", response_model=schemas.Item, tags=["Item"])
-def get_item(item_id: int, db: Session = Depends(get_db)):
+def get_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
     item = crud.get_item(db=db, item_id=item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="theres no item")
@@ -139,7 +199,11 @@ def get_item(item_id: int, db: Session = Depends(get_db)):
 
 
 @app.delete("/item/{item_id}", tags=["Item"])
-def delete_item(item_id: int, db: Session = Depends(get_db)):
+def delete_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
     delete_item = crud.delete_item(db=db, item_id=item_id)
     if delete_item is None:
         raise HTTPException(status_code=404, detail="Item not deleted")
@@ -147,7 +211,12 @@ def delete_item(item_id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/items/{item_id}", tags=["Item"])
-def update_item(item_id: int, item: schemas.ItemCreate, db: Session = Depends(get_db)):
+def update_item(
+    item_id: int,
+    item: schemas.ItemCreate,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
     update_item = crud.update_item(db=db, item=item, item_id=item_id)
     if update_item is None:
         raise HTTPException(status_code=404, detail="Item not updated")
