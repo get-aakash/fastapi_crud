@@ -22,7 +22,7 @@ def check_password(password, hash_password) -> str:
 
 
 async def verify_token(id: str, db: Session):
-    print("verify user")
+
     user = db.query(models.User).filter(models.User.id == id).first()
     print(user)
     return user
@@ -113,3 +113,15 @@ def pass_user(db: Session, username):
     user_dict = jsonable_encoder(user_value)
     current_user = schemas.User(**user_dict)
     return current_user
+
+
+def check_reset_password(new_password: str, id: int, db: Session):
+    print(new_password)
+    hashed_password = get_password_hash(new_password)
+    db_user_to_update = db.query(models.User).filter(models.User.id == id).first()
+    print(db_user_to_update)
+    db_user_to_update.hashed_password = hashed_password
+    db.add(db_user_to_update)
+    db.commit()
+    db.refresh(db_user_to_update)
+    return db_user_to_update

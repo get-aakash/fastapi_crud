@@ -8,6 +8,20 @@ class Token(BaseModel):
     token_type: str
 
 
+class TokenDataBase(BaseModel):
+    token_data: str
+    counter: int
+
+
+class TokenDataCreate(TokenDataBase):
+    pass
+
+
+class TokenData(TokenDataBase):
+    id: int
+    owner_id: int
+
+
 class ItemBase(BaseModel):
     title: str
     description: Optional[str] = None
@@ -45,3 +59,9 @@ class User(UserBase):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
+
+
+class ResetPassword(BaseModel):
+    old_password: str
+    new_password: str
+    confirm_password: str

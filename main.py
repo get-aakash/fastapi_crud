@@ -47,13 +47,16 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 
 @app.post("/users/", response_model=schemas.User, tags=["User"])
-async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+async def create_user(
+    user: schemas.UserCreate,
+    db: Session = Depends(get_db),
+):
 
     db_user = crud.get_user_by_email(db, email=user.email)
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     user = crud.create_user(db=db, user=user)
-    await send_email([user.email], user)
+    await send_email([user.email], user, db=db)
     return user
 
 
@@ -62,9 +65,9 @@ templates = Jinja2Templates(directory=os.path.abspath(os.path.expanduser("templa
 
 @app.get("/verification", response_class=HTMLResponse, tags=["Authentication"])
 async def email_verfication(request: Request, id: int, db: Session = Depends(get_db)):
-    print(email_verfication)
+
     user = await crud.verify_token(id, db)
-    print(user)
+
     if user and not user.is_active:
         user.is_active = True
         db.add(user)
@@ -73,8 +76,10 @@ async def email_verfication(request: Request, id: int, db: Session = Depends(get
             "verification.html",
             context={"request": request, "username": user.full_name},
         )
-
-    raise HTTPException(status_code=401, detail="Email already verified")
+    if user and user.is_active:
+        raise HTTPException(status_code=401, detail="Email already verified")
+    else:
+        raise HTTPException(status_code=401, detail="User does not exist")
 
 
 @app.post("/login", tags=["Authentication"])
@@ -101,6 +106,12 @@ def login_user(
     access_token = create_access_token(
         data={"user": username}, expires_delta=access_token_expires
     )
+    if not user_value.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email not verified",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -250,3 +261,34 @@ def update_item(
     if update_item is None:
         raise HTTPException(status_code=404, detail="Item not updated")
     return {"message": f"successfully updated the item with id: {item_id}"}
+
+
+@app.patch("/reset_password", tags=["Authentication"])
+async def password_reset(
+    reset_password: schemas.ResetPassword,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    username: str = payload.get("user")
+    current_user = crud.get_user_by_username(db, username=username)
+    password = current_user.hashed_password
+    verify_password = crud.check_password(reset_password.old_password, password)
+    if not verify_password:
+        raise credentials_exception
+    if reset_password.new_password != reset_password.confirm_password:
+        raise HTTPException(
+            status_code=404, detail="new password and confirm password doesnot match"
+        )
+    crud.check_reset_password(reset_password.new_password, current_user.id, db)
+
+    return {
+        "message": f"successfully updated the password for the user name: {current_user.full_name}"
+    }

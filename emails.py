@@ -1,3 +1,5 @@
+from sqlalchemy.util.langhelpers import counter
+from src import schemas
 from fastapi import FastAPI, BackgroundTasks, UploadFile, File, Form
 from starlette.responses import JSONResponse
 from starlette.requests import Request
@@ -6,6 +8,8 @@ from pydantic import BaseModel, EmailStr
 from typing import List
 from dotenv import dotenv_values
 from src.models import User
+from src import models
+from sqlalchemy.orm import Session
 
 import jwt
 
@@ -35,8 +39,13 @@ conf = ConnectionConfig(
 )
 
 
-async def send_email(email: List, instance: User):
+async def send_email(email: List, instance: User, db: Session):
     id = instance.id
+    token = id + 1000
+    db_token = models.Token(token_data=token, owner_id=id, counter=1)
+    db.add(db_token)
+    db.commit()
+    db.refresh(db_token)
 
     # token = jwt.encode(token_data, config_credentials["SECRET"], algorithm=["HS256"])
 
