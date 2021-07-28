@@ -41,6 +41,24 @@ class Item(ItemBase):
         orm_mode = True
 
 
+class CartBase(BaseModel):
+    pass
+
+
+class CartCreate(CartBase):
+    pass
+
+
+class Cart(CartBase):
+    id: int
+    owner_id: int
+    category_id: int
+    item_id: int
+
+    class Config:
+        orm_mode = True
+
+
 class CategoryBase(BaseModel):
     title: str
     description: Optional[str] = None

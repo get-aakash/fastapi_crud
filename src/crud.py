@@ -204,3 +204,16 @@ def update_category(db: Session, category_id: int, category: schemas.CategoryCre
     db.commit()
     db.refresh(update_category)
     return update_category
+
+
+def create_cart(db: Session, user_id: int, category_id: int, item_id: int):
+    db_cart = models.Cart(owner_id=user_id, category_id=category_id, item_id=item_id)
+    db.add(db_cart)
+    db.commit()
+    db.refresh(db_cart)
+    return db_cart
+
+
+def get_cart(db: Session, user_id: int):
+    return db.query(models.Cart).filter(models.Cart.owner_id == user_id).all()
+    

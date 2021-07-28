@@ -218,7 +218,7 @@ def create_item(
     db_user = crud.get_user(db=db, user_id=user_id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="user does not exist")
-    return crud.create_item(db=db, user_id=user_id, item=item, category_id= category_id)
+    return crud.create_item(db=db, user_id=user_id, item=item, category_id=category_id)
 
 
 @app.get("/items", response_model=List[schemas.Item], tags=["Item"])
@@ -413,3 +413,32 @@ def update_item(
     if update_item is None:
         raise HTTPException(status_code=404, detail="Category not updated")
     return {"message": f"successfully updated the category with id: {category_id}"}
+
+
+@app.post("/cart/{item_id}/", response_model=schemas.Cart, tags=["Cart"])
+def add_to_cart(
+    item_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    db_item = crud.get_item(db=db, item_id=item_id)
+    db_user = crud.get_user(db=db, user_id=db_item.owner_id)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="user does not exist")
+    cart = crud.create_cart(
+        db=db,
+        user_id=db_item.owner_id,
+        category_id=db_item.category_id,
+        item_id=item_id,
+    )
+    return cart
+
+
+@app.get("/cart/{user_id}", tags=["Cart"])
+def view_cart(
+    user_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    data = crud.get_cart(db=db, user_id=user_id)
+    return data

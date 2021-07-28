@@ -52,3 +52,12 @@ class ResetCode(Base):
     email = Column(String, unique=True, index=True)
     reset_code = Column(String, unique=True, index=True)
     expired_in = Column(DateTime, index=True)
+
+
+class Cart(Base):
+    __tablename__ = "carts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"))
+    category_id = Column(Integer, ForeignKey("categorys.id"))
+    item_id = Column(Integer, ForeignKey("items.id"))
