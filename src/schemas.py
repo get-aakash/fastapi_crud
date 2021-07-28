@@ -35,6 +35,7 @@ class ItemCreate(ItemBase):
 class Item(ItemBase):
     id: int
     owner_id: int
+    category_id: int
 
     class Config:
         orm_mode = True

@@ -210,6 +210,7 @@ def update_user(
 @app.post("/users/{user_id}/posts", response_model=schemas.Item, tags=["Item"])
 def create_item(
     user_id: int,
+    category_id: int,
     item: schemas.ItemCreate,
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
@@ -217,7 +218,7 @@ def create_item(
     db_user = crud.get_user(db=db, user_id=user_id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="user does not exist")
-    return crud.create_item(db=db, user_id=user_id, item=item)
+    return crud.create_item(db=db, user_id=user_id, item=item, category_id= category_id)
 
 
 @app.get("/items", response_model=List[schemas.Item], tags=["Item"])
@@ -356,8 +357,59 @@ def create_category(
     user_id: int,
     item: schemas.CategoryCreate,
     db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
 ):
     db_user = crud.get_user(db=db, user_id=user_id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="user does not exist")
-    return crud.create_item(db=db, user_id=user_id, item=item)
+    return crud.create_category(db=db, user_id=user_id, category=item)
+
+
+@app.get("/categorys", response_model=List[schemas.Category], tags=["Category"])
+def get_categorys(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    category = crud.get_items(db, skip=skip, limit=limit)
+    return category
+
+
+@app.get("/category/{category_id}", response_model=schemas.Item, tags=["Category"])
+def get_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    category = crud.get_category(db=db, category_id=category_id)
+    if category is None:
+        raise HTTPException(status_code=404, detail="theres no category")
+    return category
+
+
+@app.delete("/category/{category_id}", tags=["Category"])
+def delete_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    delete_item = crud.delete_category(db=db, category_id=category_id)
+    if delete_item is None:
+        raise HTTPException(status_code=404, detail="Item not deleted")
+    return {"message": f"successfully deleted the item with id: {category_id}"}
+
+
+@app.put("/categorys/{category_id}", tags=["Category"])
+def update_item(
+    category_id: int,
+    category: schemas.CategoryCreate,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    update_item = crud.update_category(
+        db=db, category=category, category_id=category_id
+    )
+    if update_item is None:
+        raise HTTPException(status_code=404, detail="Category not updated")
+    return {"message": f"successfully updated the category with id: {category_id}"}

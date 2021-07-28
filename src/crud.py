@@ -84,8 +84,8 @@ def update_user(
     return update_user
 
 
-def create_item(item: schemas.ItemCreate, db: Session, user_id: int):
-    db_item = models.Item(**item.dict(), owner_id=user_id)
+def create_item(item: schemas.ItemCreate, db: Session, user_id: int, category_id: int):
+    db_item = models.Item(**item.dict(), owner_id=user_id, category_id=category_id)
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
@@ -170,8 +170,37 @@ def get_reset_code(db: Session, email: str):
 
 
 def create_category(category: schemas.CategoryCreate, db: Session, user_id: int):
-    db_item = models.Category(**category.dict(), owner_id=user_id)
-    db.add(db_item)
+    db_category = models.Category(**category.dict(), owner_id=user_id)
+    db.add(db_category)
     db.commit()
-    db.refresh(db_item)
-    return db_item
+    db.refresh(db_category)
+    return db_category
+
+
+def get_categorys(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Category).offset(skip).limit(limit).all()
+
+
+def get_category(db: Session, category_id: int):
+    return db.query(models.Category).filter(models.Category.id == category_id).first()
+
+
+def delete_category(db: Session, category_id: int):
+    delete_category = (
+        db.query(models.Category).filter(models.Category.id == category_id).first()
+    )
+    db.delete(delete_category)
+    db.commit()
+    return delete_category
+
+
+def update_category(db: Session, category_id: int, category: schemas.CategoryCreate):
+    update_category = (
+        db.query(models.Category).filter(models.Category.id == category_id).first()
+    )
+    update_category.description = category.description
+    update_category.title = category.title
+
+    db.commit()
+    db.refresh(update_category)
+    return update_category
