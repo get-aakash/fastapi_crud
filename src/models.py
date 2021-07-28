@@ -26,6 +26,15 @@ class Item(Base):
     owner = relationship("User", back_populates="items")
 
 
+class Category(Base):
+    __tablename__ = "categorys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True)
+    description = Column(String, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"))
+
+
 class Token(Base):
     __tablename__ = "tokens"
 

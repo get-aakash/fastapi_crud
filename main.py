@@ -338,6 +338,8 @@ async def request_new_password(
     db: Session = Depends(get_db),
 ):
     data = crud.get_email_by_reset_code(db, reset_code)
+    if not data:
+        raise HTTPException(status_code=404, detail="Reset code does not exist")
 
     if data.expired_in < datetime.now():
         return [{"message": "The reset code has expired request a new one"}]
@@ -347,3 +349,15 @@ async def request_new_password(
     user = crud.get_user_by_email(db, data.email)
     crud.check_reset_password(new_password, user.id, db)
     return [{"message": "New password has been set please sign in to continue"}]
+
+
+@app.post("/users/{user_id}", response_model=schemas.Category, tags=["Category"])
+def create_category(
+    user_id: int,
+    item: schemas.CategoryCreate,
+    db: Session = Depends(get_db),
+):
+    db_user = crud.get_user(db=db, user_id=user_id)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="user does not exist")
+    return crud.create_item(db=db, user_id=user_id, item=item)

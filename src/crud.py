@@ -167,3 +167,11 @@ def update_reset_code(db: Session, email: str, reset_code: str):
 
 def get_reset_code(db: Session, email: str):
     return db.query(models.ResetCode).filter(models.ResetCode.email == email).first()
+
+
+def create_category(category: schemas.CategoryCreate, db: Session, user_id: int):
+    db_item = models.Category(**category.dict(), owner_id=user_id)
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item

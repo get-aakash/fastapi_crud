@@ -40,6 +40,23 @@ class Item(ItemBase):
         orm_mode = True
 
 
+class CategoryBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+
+
+class CategoryCreate(CategoryBase):
+    pass
+
+
+class Category(CategoryBase):
+    id: int
+    owner_id: int
+
+    class Config:
+        orm_mode = True
+
+
 class UserBase(BaseModel):
     full_name: str
     email: str
@@ -53,6 +70,7 @@ class User(UserBase):
     id: int
     is_active: bool
     items: List[Item] = []
+    category: List[Category] = []
 
     class Config:
         orm_mode = True
