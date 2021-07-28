@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 
 from pydantic.main import BaseModel
@@ -65,3 +66,12 @@ class ResetPassword(BaseModel):
     old_password: str
     new_password: str
     confirm_password: str
+
+
+class ForgotPassword(BaseModel):
+    email: str
+
+
+class ResetCode(BaseModel):
+    reset_code: str
+    expired_in: str

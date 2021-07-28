@@ -1,5 +1,7 @@
 import os
-from emails import send_email
+
+from pydantic.schema import schema
+from emails import forgot_password_email, send_email
 from typing import List, Optional
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
@@ -13,6 +15,7 @@ from src.database import SessionLocal, engine
 from fastapi.templating import Jinja2Templates
 from re import template
 from email import *
+import uuid
 
 
 SECRET_KEY = "96ef2d27f39d6a6f4a919495b097b841051f30b0fad4aed2c30069671bc9c70a"
@@ -64,10 +67,12 @@ templates = Jinja2Templates(directory=os.path.abspath(os.path.expanduser("templa
 
 
 @app.get("/verification", response_class=HTMLResponse, tags=["Authentication"])
-async def email_verfication(request: Request, id: int, db: Session = Depends(get_db)):
+async def email_verfication(request: Request, id: str, db: Session = Depends(get_db)):
 
-    user = await crud.verify_token(id, db)
-
+    data = await crud.verify_token(id, db)
+    if data.expired_in < datetime.now():
+        raise HTTPException(status_code=401, detail="The code has already been expired")
+    user = db.query(models.User).filter(models.User.id == data.owner_id).first()
     if user and not user.is_active:
         user.is_active = True
         db.add(user)
@@ -292,3 +297,53 @@ async def password_reset(
     return {
         "message": f"successfully updated the password for the user name: {current_user.full_name}"
     }
+
+
+@app.post("/forgot-password", tags=["Authentication"])
+async def forgot_password(
+    request: schemas.ForgotPassword,
+    db: Session = Depends(get_db),
+):
+
+    user = crud.get_user_by_email(db, request.email)
+    if not user:
+        raise HTTPException(status_code=404, detail="Email not registered")
+
+    reset_code = str(uuid.uuid1())
+    data = crud.get_reset_code(db, request.email)
+    if data.email and data.expired_in > datetime.now():
+        return [
+            {"message": "The reset code is already sent. Please check your email!!"}
+        ]
+    if data.email and data.expired_in < datetime.now():
+        reset_code = str(uuid.uuid1())
+        data = crud.update_reset_code(db, request.email, reset_code)
+        await forgot_password_email(reset_code, [request.email])
+        return [
+            {
+                "message": "The existing code has expired.The new reset code has already been sent"
+            }
+        ]
+    await crud.forgot_password(request.email, reset_code, db)
+    await forgot_password_email(reset_code, [request.email])
+
+    return [{"message": "The reset code has been sent to your email"}]
+
+
+@app.get("/new_password/{reset_code}", tags=["Authentication"])
+async def request_new_password(
+    reset_code: str,
+    new_password: str,
+    confirm_new_password: str,
+    db: Session = Depends(get_db),
+):
+    data = crud.get_email_by_reset_code(db, reset_code)
+
+    if data.expired_in < datetime.now():
+        return [{"message": "The reset code has expired request a new one"}]
+    if new_password != confirm_new_password:
+        return [{"message": "new password and confirm password does not match!!"}]
+
+    user = crud.get_user_by_email(db, data.email)
+    crud.check_reset_password(new_password, user.id, db)
+    return [{"message": "New password has been set please sign in to continue"}]

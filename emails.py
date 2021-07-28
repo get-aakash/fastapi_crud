@@ -1,5 +1,7 @@
+from datetime import datetime, timedelta
+from fastapi.exceptions import HTTPException
 from sqlalchemy.util.langhelpers import counter
-from src import schemas
+from src import crud, schemas
 from fastapi import FastAPI, BackgroundTasks, UploadFile, File, Form
 from starlette.responses import JSONResponse
 from starlette.requests import Request
@@ -10,6 +12,7 @@ from dotenv import dotenv_values
 from src.models import User
 from src import models
 from sqlalchemy.orm import Session
+import uuid
 
 import jwt
 
@@ -41,8 +44,13 @@ conf = ConnectionConfig(
 
 async def send_email(email: List, instance: User, db: Session):
     id = instance.id
-    token = id + 1000
-    db_token = models.Token(token_data=token, owner_id=id, counter=1)
+    reset_code = str(uuid.uuid1())
+    token = reset_code
+    db_token = models.Token(
+        token_data=token,
+        owner_id=id,
+        expired_in=datetime.now() + timedelta(minutes=15),
+    )
     db.add(db_token)
     db.commit()
     db.refresh(db_token)
@@ -50,11 +58,12 @@ async def send_email(email: List, instance: User, db: Session):
     # token = jwt.encode(token_data, config_credentials["SECRET"], algorithm=["HS256"])
 
     template = f"""
+    <!DOCTYPE HTML>
         <html>
         <body>
         <p>Hi !!!
         <br>Thanks for using fastapi mail, keep using it..!!!</p>
-        <a href="http://localhost:8000/verification/?id={id}">Verify your email</a>
+        <a href="http://localhost:8000/verification/?id={token}">Verify your email</a>
         </body>
         </html>
         """
@@ -69,3 +78,29 @@ async def send_email(email: List, instance: User, db: Session):
     fm = FastMail(conf)
     await fm.send_message(message=message)
     return JSONResponse(status_code=200, content={"message": "email has been sent"})
+
+
+async def forgot_password_email(reset_code: str, email: List):
+    template = f"""
+    <!DOCTYPE HTML>
+        <html>
+        <body>
+        <p>Hi !!!
+        <br>Thanks for using fastapi mail, keep using it..!!! A reset code has been sent to you please copy the code and use it to create a new password</p>
+        <h1>{reset_code}</h1>
+        </body>
+        </html>
+        """.format(
+        email, reset_code
+    )
+
+    message = MessageSchema(
+        subject="Request for new Password",
+        recipients=email,
+        body=template,
+        subtype="html",
+    )
+
+    fm = FastMail(conf)
+    await fm.send_message(message=message)
+    return message
