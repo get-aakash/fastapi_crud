@@ -25,7 +25,7 @@ def check_password(password, hash_password) -> str:
 async def verify_token(id: str, db: Session):
 
     user = db.query(models.Token).filter(models.Token.token_data == id).first()
-    print(user)
+
     return user
 
 
@@ -53,10 +53,27 @@ def get_user_by_username(db, username: str):
     return db.query(models.User).filter(models.User.full_name == username).first()
 
 
+def create_super_user(db: Session, user: schemas.UserCreate):
+    hashed_password = get_password_hash(user.password)
+    db_user = models.User(
+        email=user.email,
+        hashed_password=hashed_password,
+        full_name=user.full_name,
+        is_admin=True,
+        is_staff=False,
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+
 def create_user(db: Session, user: schemas.UserCreate):
     hashed_password = get_password_hash(user.password)
     db_user = models.User(
-        email=user.email, hashed_password=hashed_password, full_name=user.full_name
+        email=user.email,
+        hashed_password=hashed_password,
+        full_name=user.full_name,
     )
     db.add(db_user)
     db.commit()
@@ -111,6 +128,7 @@ def update_item(db: Session, item_id: int, item: schemas.ItemCreate):
     update_items = db.query(models.Item).filter(models.Item.id == item_id).first()
     update_items.description = item.description
     update_items.title = item.title
+    update_items.price = item.price
 
     db.commit()
     db.refresh(update_items)
@@ -125,10 +143,9 @@ def pass_user(db: Session, username):
 
 
 def check_reset_password(new_password: str, id: int, db: Session):
-    print(new_password)
+
     hashed_password = get_password_hash(new_password)
     db_user_to_update = db.query(models.User).filter(models.User.id == id).first()
-    print(db_user_to_update)
     db_user_to_update.hashed_password = hashed_password
     db.add(db_user_to_update)
     db.commit()
@@ -178,11 +195,13 @@ def create_category(category: schemas.CategoryCreate, db: Session, user_id: int)
 
 
 def get_categorys(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Category).offset(skip).limit(limit).all()
+    data = db.query(models.Category).offset(skip).limit(limit).all()
+    return data
 
 
 def get_category(db: Session, category_id: int):
-    return db.query(models.Category).filter(models.Category.id == category_id).first()
+    data = db.query(models.Category).filter(models.Category.id == category_id).first()
+    return data
 
 
 def delete_category(db: Session, category_id: int):
@@ -214,6 +233,20 @@ def create_cart(db: Session, user_id: int, category_id: int, item_id: int):
     return db_cart
 
 
-def get_cart(db: Session, user_id: int):
+def get_carts(db: Session, user_id: int):
     return db.query(models.Cart).filter(models.Cart.owner_id == user_id).all()
-    
+
+
+def get_cart(db: Session, user_id: int):
+    return db.query(models.Cart).filter(models.Cart.owner_id == user_id).first()
+
+
+def get_cart_by_item(db: Session, item_id: int):
+    return db.query(models.Cart).filter(models.Cart.item_id == item_id).first()
+
+
+def delete_cart(db: Session, item_id: int):
+    delete_cart = db.query(models.Cart).filter(models.Cart.item_id == item_id).first()
+    db.delete(delete_cart)
+    db.commit()
+    return delete_cart

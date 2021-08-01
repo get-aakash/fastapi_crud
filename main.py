@@ -63,6 +63,20 @@ async def create_user(
     return user
 
 
+@app.post("/super_user/", response_model=schemas.User, tags=["User"])
+async def create_super_user(
+    user: schemas.UserCreate,
+    db: Session = Depends(get_db),
+):
+
+    db_user = crud.get_user_by_email(db, email=user.email)
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    user = crud.create_super_user(db=db, user=user)
+    await send_email([user.email], user, db=db)
+    return user
+
+
 templates = Jinja2Templates(directory=os.path.abspath(os.path.expanduser("templates")))
 
 
@@ -138,7 +152,7 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
     current_user = crud.pass_user(db, username=token_data.username)
-    print(current_user)
+
     if current_user is None:
         raise credentials_exception
     return current_user
@@ -154,7 +168,6 @@ def read_users(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    token: str = Depends(oauth2_scheme),
 ):
 
     users = crud.get_users(db, skip=skip, limit=limit)
@@ -167,7 +180,7 @@ def read_user(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
-    print("this is the read user")
+
     db_user = crud.get_user(db=db, user_id=user_id)
     if db_user is None:
         raise HTTPException(status_code=404, detail="user does not exist")
@@ -209,16 +222,23 @@ def update_user(
 
 @app.post("/users/{user_id}/posts", response_model=schemas.Item, tags=["Item"])
 def create_item(
-    user_id: int,
     category_id: int,
     item: schemas.ItemCreate,
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
-    db_user = crud.get_user(db=db, user_id=user_id)
-    if db_user is None:
+
+    current_user = get_current_user(db=db, token=token)
+    if current_user is None:
         raise HTTPException(status_code=404, detail="user does not exist")
-    return crud.create_item(db=db, user_id=user_id, item=item, category_id=category_id)
+    if current_user.is_admin is False:
+        raise HTTPException(status_code=401, detail="Only admins can create Item")
+    category = crud.get_category(db=db, category_id=category_id)
+    if category is None:
+        raise HTTPException(status_code=404, detail="Category does not exist")
+    return crud.create_item(
+        db=db, user_id=current_user.id, item=item, category_id=category_id
+    )
 
 
 @app.get("/items", response_model=List[schemas.Item], tags=["Item"])
@@ -250,6 +270,11 @@ def delete_item(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
+    current_user = get_current_user(db=db, token=token)
+    if current_user is None:
+        raise HTTPException(status_code=404, detail="user does not exist")
+    if current_user.is_admin is False:
+        raise HTTPException(status_code=401, detail="Only admins can delete Item")
     delete_item = crud.delete_item(db=db, item_id=item_id)
     if delete_item is None:
         raise HTTPException(status_code=404, detail="Item not deleted")
@@ -263,6 +288,11 @@ def update_item(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
+    current_user = get_current_user(db=db, token=token)
+    if current_user is None:
+        raise HTTPException(status_code=404, detail="user does not exist")
+    if current_user.is_admin is False:
+        raise HTTPException(status_code=401, detail="Only admins can update Item")
     update_item = crud.update_item(db=db, item=item, item_id=item_id)
     if update_item is None:
         raise HTTPException(status_code=404, detail="Item not updated")
@@ -354,15 +384,18 @@ async def request_new_password(
 
 @app.post("/users/{user_id}", response_model=schemas.Category, tags=["Category"])
 def create_category(
-    user_id: int,
     item: schemas.CategoryCreate,
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
-    db_user = crud.get_user(db=db, user_id=user_id)
-    if db_user is None:
+    current_user = get_current_user(db=db, token=token)
+    if current_user is None:
         raise HTTPException(status_code=404, detail="user does not exist")
-    return crud.create_category(db=db, user_id=user_id, category=item)
+    if current_user.is_admin is False:
+        raise HTTPException(status_code=404, detail="Only admins can create category")
+
+    value = crud.create_category(db=db, user_id=current_user.id, category=item)
+    return value.title
 
 
 @app.get("/categorys", response_model=List[schemas.Category], tags=["Category"])
@@ -372,11 +405,11 @@ def get_categorys(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
-    category = crud.get_items(db, skip=skip, limit=limit)
+    category = crud.get_categorys(db, skip=skip, limit=limit)
     return category
 
 
-@app.get("/category/{category_id}", response_model=schemas.Item, tags=["Category"])
+@app.get("/category/{category_id}", response_model=schemas.Category, tags=["Category"])
 def get_category(
     category_id: int,
     db: Session = Depends(get_db),
@@ -384,7 +417,7 @@ def get_category(
 ):
     category = crud.get_category(db=db, category_id=category_id)
     if category is None:
-        raise HTTPException(status_code=404, detail="theres no category")
+        raise HTTPException(status_code=404, detail="category does not exist")
     return category
 
 
@@ -394,6 +427,11 @@ def delete_category(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
+    current_user = get_current_user(db=db, token=token)
+    if current_user is None:
+        raise HTTPException(status_code=404, detail="user does not exist")
+    if current_user.is_admin is False:
+        raise HTTPException(status_code=401, detail="Only admins can delete category")
     delete_item = crud.delete_category(db=db, category_id=category_id)
     if delete_item is None:
         raise HTTPException(status_code=404, detail="Item not deleted")
@@ -401,12 +439,17 @@ def delete_category(
 
 
 @app.put("/categorys/{category_id}", tags=["Category"])
-def update_item(
+def update_category(
     category_id: int,
     category: schemas.CategoryCreate,
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
+    current_user = get_current_user(db=db, token=token)
+    if current_user is None:
+        raise HTTPException(status_code=404, detail="user does not exist")
+    if current_user.is_admin is False:
+        raise HTTPException(status_code=401, detail="Only admins can update category")
     update_item = crud.update_category(
         db=db, category=category, category_id=category_id
     )
@@ -421,24 +464,52 @@ def add_to_cart(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
+
+    current_user = get_current_user(db=db, token=token)
+    db_cart = crud.get_carts(db, user_id=current_user.id)
+    for dbs in db_cart:
+        if dbs.item_id == item_id:
+            raise HTTPException(
+                status_code=401, detail="The item is already on the cart"
+            )
     db_item = crud.get_item(db=db, item_id=item_id)
-    db_user = crud.get_user(db=db, user_id=db_item.owner_id)
-    if db_user is None:
-        raise HTTPException(status_code=404, detail="user does not exist")
+
     cart = crud.create_cart(
         db=db,
-        user_id=db_item.owner_id,
+        user_id=current_user.id,
         category_id=db_item.category_id,
         item_id=item_id,
     )
     return cart
 
 
-@app.get("/cart/{user_id}", tags=["Cart"])
+@app.get("/cart", tags=["Cart"])
 def view_cart(
-    user_id: int,
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
-    data = crud.get_cart(db=db, user_id=user_id)
+    current_user = get_current_user(db=db, token=token)
+
+    if current_user is None:
+        raise HTTPException(status_code=404, detail="user does not exist")
+    data = crud.get_carts(db=db, user_id=current_user.id)
     return data
+
+
+@app.delete("/cart/{item_id}", tags=["Cart"])
+def delete_cart(
+    item_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    current_user = get_current_user(db=db, token=token)
+
+    db_cart = crud.get_carts(db, user_id=current_user.id)
+    for dbs in db_cart:
+        if dbs.item_id == item_id:
+            crud.delete_cart(db=db, item_id=item_id)
+            raise HTTPException(
+                status_code=401, detail="The item in the cart  is  deleted"
+            )
+
+    raise HTTPException(status_code=404, detail="Cart not deleted or empty cart")

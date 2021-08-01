@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql.sqltypes import DateTime
+from sqlalchemy.sql.sqltypes import DECIMAL, DateTime
 from .database import Base
 
 
@@ -12,6 +12,8 @@ class User(Base):
     full_name = Column(String, index=True)
     hashed_password = Column(String)
     is_active = Column(Boolean, default=False)
+    is_admin = Column(Boolean, default=False)
+    is_staff = Column(Boolean, default=True)
     items = relationship("Item", back_populates="owner")
 
 
@@ -20,6 +22,7 @@ class Item(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
+    price = Column(DECIMAL, index=True)
     description = Column(String, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
     category_id = Column(Integer, ForeignKey("categorys.id"))

@@ -25,6 +25,7 @@ class TokenData(TokenDataBase):
 
 class ItemBase(BaseModel):
     title: str
+    price: float
     description: Optional[str] = None
 
 
@@ -88,6 +89,8 @@ class UserCreate(UserBase):
 class User(UserBase):
     id: int
     is_active: bool
+    is_admin: bool
+    is_staff: bool
     items: List[Item] = []
     category: List[Category] = []
 
