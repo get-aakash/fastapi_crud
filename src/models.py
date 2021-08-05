@@ -64,3 +64,21 @@ class Cart(Base):
     owner_id = Column(Integer, ForeignKey("users.id"))
     category_id = Column(Integer, ForeignKey("categorys.id"))
     item_id = Column(Integer, ForeignKey("items.id"))
+
+
+class Order(Base):
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    address = Column(String, index=True)
+    cart_id = Column(Integer, ForeignKey("carts.id"))
+    quantity = Column(Integer, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"))
+
+
+class Billing(Base):
+    __tablename__ = "billings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"))
+    total = Column(DECIMAL, index=True)

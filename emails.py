@@ -58,14 +58,26 @@ async def send_email(email: List, instance: User, db: Session):
     # token = jwt.encode(token_data, config_credentials["SECRET"], algorithm=["HS256"])
 
     template = f"""
-    <!DOCTYPE HTML>
-        <html>
-        <body>
-        <p>Hi !!!
-        <br>Thanks for using fastapi mail, keep using it..!!!</p>
+    <!DOCTYPE html>
+    <html>
+
+    <head>
+	    <title>
+	        content attribute in HTMLs
+        </title>
+	        <meta name="keywords"
+		        content="content attribute
+				        in Meta Tag, Metadata" />
+    </head>
+
+        <body style="text-align:center;">
         <a href="http://localhost:8000/verification/?id={token}">Verify your email</a>
+	        <h1> GeeksforGeeks</h1>
+	        <h2>Content Attribute In HTML</h2>
         </body>
-        </html>
+
+    </html>
+    
         """
 
     message = MessageSchema(

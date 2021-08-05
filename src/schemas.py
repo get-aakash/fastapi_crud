@@ -115,3 +115,37 @@ class ForgotPassword(BaseModel):
 class ResetCode(BaseModel):
     reset_code: str
     expired_in: str
+
+
+class OrderBase(BaseModel):
+    address: str
+    quantity: int
+
+
+class OrderCreate(OrderBase):
+    pass
+
+
+class Order(OrderBase):
+    id: int
+    cart_id: int
+    owner_id: int
+
+    class Config:
+        orm_mode = True
+
+
+class BillBase(BaseModel):
+    total: float
+
+
+class BillCreate(BillBase):
+    pass
+
+
+class Bill(BillBase):
+    id: int
+    owner_id: int
+
+    class Config:
+        orm_mode = True

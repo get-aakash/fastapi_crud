@@ -49,7 +49,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
-@app.post("/users/", response_model=schemas.User, tags=["User"])
+@app.post("/create_user/", response_model=schemas.User, tags=["User"])
 async def create_user(
     user: schemas.UserCreate,
     db: Session = Depends(get_db),
@@ -84,6 +84,7 @@ templates = Jinja2Templates(directory=os.path.abspath(os.path.expanduser("templa
 async def email_verfication(request: Request, id: str, db: Session = Depends(get_db)):
 
     data = await crud.verify_token(id, db)
+
     if data.expired_in < datetime.now():
         raise HTTPException(status_code=401, detail="The code has already been expired")
     user = db.query(models.User).filter(models.User.id == data.owner_id).first()
@@ -163,7 +164,7 @@ def view_user_profile(current_user: schemas.User = Depends(get_current_user)):
     return current_user
 
 
-@app.get("/users/", response_model=List[schemas.User], tags=["User"])
+@app.get("/view_users/", response_model=List[schemas.User], tags=["User"])
 def read_users(
     skip: int = 0,
     limit: int = 100,
@@ -220,7 +221,7 @@ def update_user(
     return update_user
 
 
-@app.post("/users/{user_id}/posts", response_model=schemas.Item, tags=["Item"])
+@app.post("/users/{user_id}", response_model=schemas.Item, tags=["Item"])
 def create_item(
     category_id: int,
     item: schemas.ItemCreate,
@@ -382,7 +383,7 @@ async def request_new_password(
     return [{"message": "New password has been set please sign in to continue"}]
 
 
-@app.post("/users/{user_id}", response_model=schemas.Category, tags=["Category"])
+@app.post("/users/", response_model=schemas.Category, tags=["Category"])
 def create_category(
     item: schemas.CategoryCreate,
     db: Session = Depends(get_db),
@@ -395,7 +396,7 @@ def create_category(
         raise HTTPException(status_code=404, detail="Only admins can create category")
 
     value = crud.create_category(db=db, user_id=current_user.id, category=item)
-    return value.title
+    return value
 
 
 @app.get("/categorys", response_model=List[schemas.Category], tags=["Category"])
@@ -513,3 +514,75 @@ def delete_cart(
             )
 
     raise HTTPException(status_code=404, detail="Cart not deleted or empty cart")
+
+
+@app.post("/order/{cart_id}/", response_model=schemas.Order, tags=["Order"])
+def Order(
+    cart_id: int,
+    order: schemas.OrderCreate,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    data = crud.get_cart_by_id(cart_id=cart_id, db=db)
+    if data is None:
+        raise HTTPException(status_code=401, detail="the cart does not exist")
+
+    current_user = get_current_user(db=db, token=token)
+
+    order = crud.order(
+        db=db,
+        user_id=current_user.id,
+        cart_id=cart_id,
+        order=order,
+    )
+    return order
+
+
+@app.get("/order/{order_id}", tags=["Order"])
+def get_order(
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    current_user = get_current_user(db=db, token=token)
+    order = crud.get_order(db=db, user_id=current_user.id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order does not exist")
+    return order
+
+
+@app.post("/bill/", response_model=schemas.Bill, tags=["Bill"])
+def create_bill(
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+
+    current_user = get_current_user(db=db, token=token)
+    db_bill = crud.get_bill(db=db, owner_id=current_user.id)
+    if db_bill:
+        raise HTTPException(status_code=401, detail="Bill already exist")
+    bill = 0
+    order = crud.get_order(db=db, user_id=current_user.id)
+    for value in order:
+        item = crud.get_cart_by_id(db=db, cart_id=value.cart_id)
+        item_price = crud.get_item(db=db, item_id=item.item_id)
+        total = value.quantity * item_price.price
+        bill = bill + total
+
+    data = crud.bill(
+        db=db,
+        owner_id=current_user.id,
+        total=bill,
+    )
+    return data
+
+
+@app.get("/bill/{bill_id}", tags=["Bill"])
+def get_bill(
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    current_user = get_current_user(db=db, token=token)
+    db_bill = crud.get_bill(db=db, owner_id=current_user.id)
+    if db_bill is None:
+        return HTTPException(status_code=401, detail="Bill does not exist")
+    return db_bill

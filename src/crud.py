@@ -241,6 +241,14 @@ def get_cart(db: Session, user_id: int):
     return db.query(models.Cart).filter(models.Cart.owner_id == user_id).first()
 
 
+def get_cart_by_id(db: Session, cart_id: int):
+    return db.query(models.Cart).filter(models.Cart.id == cart_id).first()
+
+
+def get_order_by_id(db: Session, order_id: int):
+    return db.query(models.Order).filter(models.Order.id == order_id).first()
+
+
 def get_cart_by_item(db: Session, item_id: int):
     return db.query(models.Cart).filter(models.Cart.item_id == item_id).first()
 
@@ -250,3 +258,29 @@ def delete_cart(db: Session, item_id: int):
     db.delete(delete_cart)
     db.commit()
     return delete_cart
+
+
+def order(db: Session, user_id: int, cart_id: int, order: schemas.OrderCreate):
+    db_order = models.Order(**order.dict(), cart_id=cart_id, owner_id=user_id)
+    db.add(db_order)
+    db.commit()
+    db.refresh(db_order)
+    return db_order
+
+
+def get_order(db: Session, user_id: int):
+    data = db.query(models.Order).filter(models.Order.owner_id == user_id).all()
+    return data
+
+
+def bill(db: Session, owner_id: int, total: float):
+    db_bill = models.Billing(total=total, owner_id=owner_id)
+    db.add(db_bill)
+    db.commit()
+    db.refresh(db_bill)
+    return db_bill
+
+
+def get_bill(db: Session, owner_id: int):
+    bill = db.query(models.Billing).filter(models.Billing.owner_id == owner_id).first()
+    return bill
