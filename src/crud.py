@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 from fastapi.exceptions import HTTPException
+from fastapi.param_functions import File
 from sqlalchemy.orm import Session, session
 from passlib.context import CryptContext
 from . import models, schemas
@@ -101,8 +102,17 @@ def update_user(
     return update_user
 
 
-def create_item(item: schemas.ItemCreate, db: Session, user_id: int, category_id: int):
-    db_item = models.Item(**item.dict(), owner_id=user_id, category_id=category_id)
+def create_item(
+    item: schemas.ItemCreate,
+    db: Session,
+    user_id: int,
+    category_id: int,
+):
+    db_item = models.Item(
+        **item.dict(),
+        owner_id=user_id,
+        category_id=category_id,
+    )
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
@@ -110,6 +120,7 @@ def create_item(item: schemas.ItemCreate, db: Session, user_id: int, category_id
 
 
 def get_items(db: Session, skip: int = 0, limit: int = 100):
+
     return db.query(models.Item).offset(skip).limit(limit).all()
 
 
@@ -284,3 +295,49 @@ def bill(db: Session, owner_id: int, total: float):
 def get_bill(db: Session, owner_id: int):
     bill = db.query(models.Billing).filter(models.Billing.owner_id == owner_id).first()
     return bill
+
+
+def create_profile(
+    db: Session,
+    img_name: str,
+    img_url: str,
+    first_name: str,
+    last_name: str,
+    address: str,
+    user_id: str,
+):
+    db_img = models.UserProfile(
+        img_name=img_name,
+        img_url=img_url,
+        first_name=first_name,
+        last_name=last_name,
+        address=address,
+        user_id=user_id,
+    )
+    db.add(db_img)
+    db.commit()
+    db.refresh(db_img)
+    return db_img
+
+
+def profiles(db: Session, skip: int = 0, limit: int = 100):
+    data = db.query(models.UserProfile).offset(skip).limit(limit).all()
+    return data
+
+
+def get_user_profile(db: Session, user_id: int):
+    db_user = (
+        db.query(models.UserProfile)
+        .filter(models.UserProfile.user_id == user_id)
+        .first()
+    )
+    return db_user
+
+
+def delete_profile(db: Session, profile_id: int):
+    delete_profile = (
+        db.query(models.UserProfile).filter(models.UserProfile.id == profile_id).first()
+    )
+    db.delete(delete_profile)
+    db.commit()
+    return delete_profile

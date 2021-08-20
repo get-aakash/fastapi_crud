@@ -15,6 +15,7 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     is_staff = Column(Boolean, default=True)
     items = relationship("Item", back_populates="owner")
+    category = relationship("Category", back_populates="owner")
 
 
 class Item(Base):
@@ -28,6 +29,7 @@ class Item(Base):
     category_id = Column(Integer, ForeignKey("categorys.id"))
 
     owner = relationship("User", back_populates="items")
+    category_list = relationship("Category", back_populates="items_list")
 
 
 class Category(Base):
@@ -37,6 +39,8 @@ class Category(Base):
     title = Column(String, index=True)
     description = Column(String, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
+    owner = relationship("User", back_populates="category")
+    items_list = relationship("Item", back_populates="category_list")
 
 
 class Token(Base):
@@ -82,3 +86,15 @@ class Billing(Base):
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
     total = Column(DECIMAL, index=True)
+
+
+class UserProfile(Base):
+    __tablename__ = "userprofiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    first_name = Column(String, index=True)
+    last_name = Column(String, index=True)
+    address = Column(String, index=True)
+    img_url = Column(String, index=True)
+    img_name = Column(String, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))

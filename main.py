@@ -1,11 +1,18 @@
 import os
-
+import secrets
+from fastapi.staticfiles import StaticFiles
+from PIL import Image
+from pydantic.errors import DateError
+from pydantic.types import FilePath
+from sqlalchemy.sql.functions import current_user
+from starlette.responses import JSONResponse
 from pydantic.schema import schema
-from emails import forgot_password_email, send_email
+from fastapi import BackgroundTasks, File, UploadFile
+from emails import EmailSchema, forgot_password_email, send_email
 from typing import List, Optional
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status, Form
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
@@ -16,6 +23,7 @@ from fastapi.templating import Jinja2Templates
 from re import template
 from email import *
 import uuid
+import emails
 
 
 SECRET_KEY = "96ef2d27f39d6a6f4a919495b097b841051f30b0fad4aed2c30069671bc9c70a"
@@ -238,11 +246,14 @@ def create_item(
     if category is None:
         raise HTTPException(status_code=404, detail="Category does not exist")
     return crud.create_item(
-        db=db, user_id=current_user.id, item=item, category_id=category_id
+        db=db,
+        user_id=current_user.id,
+        item=item,
+        category_id=category_id,
     )
 
 
-@app.get("/items", response_model=List[schemas.Item], tags=["Item"])
+@app.get("/items", tags=["Item"])
 def get_items(
     skip: int = 0,
     limit: int = 100,
@@ -250,19 +261,22 @@ def get_items(
     token: str = Depends(oauth2_scheme),
 ):
     items = crud.get_items(db, skip=skip, limit=limit)
-    return items
+    db_category = crud.get_categorys(db=db, skip=skip, limit=limit)
+
+    return db_category, items
 
 
-@app.get("/item/{item_id}", response_model=schemas.Item, tags=["Item"])
+@app.get("/item/{item_id}", tags=["Item"])
 def get_item(
     item_id: int,
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
     item = crud.get_item(db=db, item_id=item_id)
+    db_category = crud.get_category(db=db, category_id=item.category_id)
     if item is None:
         raise HTTPException(status_code=404, detail="theres no item")
-    return item
+    return db_category.title, item
 
 
 @app.delete("/item/{item_id}", tags=["Item"])
@@ -343,6 +357,12 @@ async def forgot_password(
 
     reset_code = str(uuid.uuid1())
     data = crud.get_reset_code(db, request.email)
+    if data is None:
+        await crud.forgot_password(request.email, reset_code, db)
+        await forgot_password_email(reset_code, [request.email])
+
+        return [{"message": "The reset code has been sent to your email"}]
+
     if data.email and data.expired_in > datetime.now():
         return [
             {"message": "The reset code is already sent. Please check your email!!"}
@@ -356,10 +376,6 @@ async def forgot_password(
                 "message": "The existing code has expired.The new reset code has already been sent"
             }
         ]
-    await crud.forgot_password(request.email, reset_code, db)
-    await forgot_password_email(reset_code, [request.email])
-
-    return [{"message": "The reset code has been sent to your email"}]
 
 
 @app.get("/new_password/{reset_code}", tags=["Authentication"])
@@ -474,6 +490,8 @@ def add_to_cart(
                 status_code=401, detail="The item is already on the cart"
             )
     db_item = crud.get_item(db=db, item_id=item_id)
+    if db_item is None:
+        raise HTTPException(status_code=404, detail="category does not exist")
 
     cart = crud.create_cart(
         db=db,
@@ -586,3 +604,114 @@ def get_bill(
     if db_bill is None:
         return HTTPException(status_code=401, detail="Bill does not exist")
     return db_bill
+
+
+@app.get("/send-email/asynchronous")
+async def send_email_asynchronous():
+    await emails.send_email_async(
+        "Hello World",
+        "mail.aakash108@gmail.com",
+        {"title": "Hello World", "name": "John Doe"},
+    )
+    return "Success"
+
+
+@app.get("/form", response_class=HTMLResponse)
+def form_return(request: Request):
+    return templates.TemplateResponse(
+        "form.html", context={"request": request, "username": "hello"}
+    )
+
+
+@app.post("/create_profile/", tags=["User Profile"])
+async def create_profile(
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    address: str = Form(...),
+    assign_file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+
+    current_user = get_current_user(db=db, token=token)
+    user = crud.get_user_profile(db=db, user_id=current_user.id)
+    if user:
+        return user
+    if current_user is None:
+        raise HTTPException(status_code=404, detail="user does not exist")
+    FILEPATH = "./static/images/"
+    filename = assign_file.filename
+    extension = filename.split(".")[1]
+
+    if extension not in ["png", "jpeg", "jpg"]:
+        raise HTTPException(status_code=401, detail="extension does not match")
+    token_name = filename
+    generated_name = FILEPATH + token_name
+
+    file_content = await assign_file.read()
+
+    with open(generated_name, "wb") as file:
+        file.write(file_content)
+
+    img = Image.open(generated_name)
+    img = img.resize(size=(200, 200))
+    img.save(generated_name)
+    file.close()
+
+    file_url = generated_name[1:]
+    value = crud.create_profile(
+        img_name=token_name,
+        db=db,
+        img_url=file_url,
+        first_name=first_name,
+        last_name=last_name,
+        address=address,
+        user_id=current_user.id,
+    )
+    if value:
+        return {"status": "ok", "file_url": file_url}
+
+
+@app.get("/user_profile/", tags=["User Profile"])
+def get_profile(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    current_user = get_current_user(db=db, token=token)
+    db_user_profile = crud.get_user_profile(db=db, user_id=current_user.id)
+    if db_user_profile is None:
+        return HTTPException(status_code=401, detail="Bill does not exist")
+    return db_user_profile
+
+
+@app.get(
+    "/get_all_profiles/",
+    response_model=List[schemas.UserProfile],
+    tags=["User Profile"],
+)
+def get_all_profiles(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    current_user = get_current_user(db=db, token=token)
+    if current_user.is_admin:
+        profile = crud.profiles(db, skip=skip, limit=limit)
+        return profile
+    else:
+        raise HTTPException(status_code=401, detail="only super user can access")
+
+
+@app.delete("/UserProfile/{profile_id}", tags=["User Profile"])
+def delete_profile(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    current_user = get_current_user(db=db, token=token)
+    if current_user.is_admin:
+        db_profile = crud.delete_profile(db=db, profile_id=profile_id)
+        return db_profile
+    else:
+        raise HTTPException(status_code=401, detail="Only super user can delete")

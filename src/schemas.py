@@ -72,6 +72,7 @@ class CategoryCreate(CategoryBase):
 class Category(CategoryBase):
     id: int
     owner_id: int
+    items_list: List[Item] = []
 
     class Config:
         orm_mode = True
@@ -146,6 +147,26 @@ class BillCreate(BillBase):
 class Bill(BillBase):
     id: int
     owner_id: int
+
+    class Config:
+        orm_mode = True
+
+
+class UserProfileBase(BaseModel):
+    first_name: str
+    last_name: str
+    address: str
+    img_url: str
+    img_name: str
+
+
+class UserProfileCreate(UserProfileBase):
+    pass
+
+
+class UserProfile(UserProfileBase):
+    id: int
+    user_id: int
 
     class Config:
         orm_mode = True
