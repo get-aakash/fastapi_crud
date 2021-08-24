@@ -24,9 +24,9 @@ class TokenData(TokenDataBase):
 
 
 class ItemBase(BaseModel):
-    title: str
-    price: float
-    description: Optional[str] = None
+    item_title: str
+    item_price: float
+    item_description: Optional[str] = None
 
 
 class ItemCreate(ItemBase):
@@ -61,8 +61,8 @@ class Cart(CartBase):
 
 
 class CategoryBase(BaseModel):
-    title: str
-    description: Optional[str] = None
+    category_title: str
+    category_description: Optional[str] = None
 
 
 class CategoryCreate(CategoryBase):
@@ -131,6 +131,8 @@ class Order(OrderBase):
     id: int
     cart_id: int
     owner_id: int
+    item_id: int
+    category_id: int
 
     class Config:
         orm_mode = True
@@ -147,6 +149,8 @@ class BillCreate(BillBase):
 class Bill(BillBase):
     id: int
     owner_id: int
+    item_id: int
+    category_id: int
 
     class Config:
         orm_mode = True

@@ -245,12 +245,14 @@ def create_item(
     category = crud.get_category(db=db, category_id=category_id)
     if category is None:
         raise HTTPException(status_code=404, detail="Category does not exist")
-    return crud.create_item(
+    datas = crud.create_item(
         db=db,
         user_id=current_user.id,
         item=item,
         category_id=category_id,
     )
+
+    return datas
 
 
 @app.get("/items", tags=["Item"])
@@ -273,10 +275,10 @@ def get_item(
     token: str = Depends(oauth2_scheme),
 ):
     item = crud.get_item(db=db, item_id=item_id)
-    db_category = crud.get_category(db=db, category_id=item.category_id)
+
     if item is None:
         raise HTTPException(status_code=404, detail="theres no item")
-    return db_category.title, item
+    return item
 
 
 @app.delete("/item/{item_id}", tags=["Item"])
@@ -412,6 +414,7 @@ def create_category(
         raise HTTPException(status_code=404, detail="Only admins can create category")
 
     value = crud.create_category(db=db, user_id=current_user.id, category=item)
+    print(value.category_title)
     return value
 
 
@@ -423,6 +426,7 @@ def get_categorys(
     token: str = Depends(oauth2_scheme),
 ):
     category = crud.get_categorys(db, skip=skip, limit=limit)
+
     return category
 
 
@@ -485,18 +489,19 @@ def add_to_cart(
     current_user = get_current_user(db=db, token=token)
     db_cart = crud.get_carts(db, user_id=current_user.id)
     for dbs in db_cart:
-        if dbs.item_id == item_id:
+        if dbs[6] == item_id:
             raise HTTPException(
                 status_code=401, detail="The item is already on the cart"
             )
     db_item = crud.get_item(db=db, item_id=item_id)
     if db_item is None:
         raise HTTPException(status_code=404, detail="category does not exist")
+    print(db_item[0])
 
     cart = crud.create_cart(
         db=db,
         user_id=current_user.id,
-        category_id=db_item.category_id,
+        category_id=db_item[1],
         item_id=item_id,
     )
     return cart
@@ -542,6 +547,7 @@ def Order(
     token: str = Depends(oauth2_scheme),
 ):
     data = crud.get_cart_by_id(cart_id=cart_id, db=db)
+    print(data)
     if data is None:
         raise HTTPException(status_code=401, detail="the cart does not exist")
 
@@ -552,6 +558,8 @@ def Order(
         user_id=current_user.id,
         cart_id=cart_id,
         order=order,
+        category_id=data.category_id,
+        item_id=data.item_id,
     )
     return order
 
@@ -563,6 +571,7 @@ def get_order(
 ):
     current_user = get_current_user(db=db, token=token)
     order = crud.get_order(db=db, user_id=current_user.id)
+    print(order)
     if order is None:
         raise HTTPException(status_code=404, detail="Order does not exist")
     return order
@@ -580,10 +589,13 @@ def create_bill(
         raise HTTPException(status_code=401, detail="Bill already exist")
     bill = 0
     order = crud.get_order(db=db, user_id=current_user.id)
+    print(order)
     for value in order:
-        item = crud.get_cart_by_id(db=db, cart_id=value.cart_id)
+        item = crud.get_cart_by_id(db=db, cart_id=value[4])
+        print(item)
         item_price = crud.get_item(db=db, item_id=item.item_id)
-        total = value.quantity * item_price.price
+        print(item_price[4])
+        total = value.quantity * item_price[4]
         bill = bill + total
 
     data = crud.bill(
@@ -715,3 +727,56 @@ def delete_profile(
         return db_profile
     else:
         raise HTTPException(status_code=401, detail="Only super user can delete")
+
+
+@app.put("/profile/{profile_id}", tags=["User Profile"])
+async def update_profile(
+    profile_id: int,
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    address: str = Form(...),
+    assign_file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+):
+    current_user = get_current_user(db=db, token=token)
+
+    if current_user is None:
+        raise HTTPException(status_code=404, detail="user does not exist")
+    db_profile = crud.get_user_profile(db=db, user_id=current_user.id)
+    if db_profile.user_id != profile_id:
+        return HTTPException(status_code=401, detail="cannot update other user profile")
+
+    FILEPATH = "./static/images/"
+    filename = assign_file.filename
+    extension = filename.split(".")[1]
+
+    if extension not in ["png", "jpeg", "jpg"]:
+        raise HTTPException(status_code=401, detail="extension does not match")
+    token_name = filename
+    generated_name = FILEPATH + token_name
+
+    file_content = await assign_file.read()
+
+    with open(generated_name, "wb") as file:
+        file.write(file_content)
+
+    img = Image.open(generated_name)
+    img = img.resize(size=(200, 200))
+    img.save(generated_name)
+    file.close()
+
+    file_url = generated_name[1:]
+    update_profile = crud.update_profile(
+        img_name=token_name,
+        db=db,
+        img_url=file_url,
+        first_name=first_name,
+        last_name=last_name,
+        address=address,
+        user_id=current_user.id,
+        profile_id=profile_id,
+    )
+    if update_profile is None:
+        raise HTTPException(status_code=404, detail="Category not updated")
+    return {"message": f"successfully updated the profile with id: {profile_id}"}

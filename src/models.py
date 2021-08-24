@@ -22,9 +22,9 @@ class Item(Base):
     __tablename__ = "items"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    price = Column(DECIMAL, index=True)
-    description = Column(String, index=True)
+    item_title = Column(String, index=True)
+    item_price = Column(DECIMAL, index=True)
+    item_description = Column(String, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
     category_id = Column(Integer, ForeignKey("categorys.id"))
 
@@ -36,8 +36,8 @@ class Category(Base):
     __tablename__ = "categorys"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    description = Column(String, index=True)
+    category_title = Column(String, index=True)
+    category_description = Column(String, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="category")
     items_list = relationship("Item", back_populates="category_list")
@@ -78,6 +78,8 @@ class Order(Base):
     cart_id = Column(Integer, ForeignKey("carts.id"))
     quantity = Column(Integer, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
+    item_id = Column(Integer, ForeignKey("items.id"))
+    category_id = Column(Integer, ForeignKey("categorys.id"))
 
 
 class Billing(Base):
@@ -86,6 +88,8 @@ class Billing(Base):
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
     total = Column(DECIMAL, index=True)
+    item_id = Column(Integer, ForeignKey("items.id"))
+    category_id = Column(Integer, ForeignKey("categorys.id"))
 
 
 class UserProfile(Base):

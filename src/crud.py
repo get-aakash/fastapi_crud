@@ -125,7 +125,19 @@ def get_items(db: Session, skip: int = 0, limit: int = 100):
 
 
 def get_item(db: Session, item_id: int):
-    return db.query(models.Item).filter(models.Item.id == item_id).first()
+    db_item = (
+        db.query(
+            models.Category.category_title,
+            models.Item.id,
+            models.Item.item_title,
+            models.Item.item_description,
+            models.Item.item_price,
+        )
+        .join(models.Category)
+        .filter(models.Item.id == item_id)
+        .first()
+    )
+    return db_item
 
 
 def delete_item(db: Session, item_id: int):
@@ -245,7 +257,23 @@ def create_cart(db: Session, user_id: int, category_id: int, item_id: int):
 
 
 def get_carts(db: Session, user_id: int):
-    return db.query(models.Cart).filter(models.Cart.owner_id == user_id).all()
+    return (
+        db.query(
+            models.Cart.id,
+            models.User.full_name,
+            models.Category.category_title,
+            models.Item.item_title,
+            models.Item.item_description,
+            models.Item.item_price,
+            models.Item.id,
+        )
+        .select_from(models.Cart)
+        .join(models.Category)
+        .join(models.Item)
+        .join(models.User)
+        .filter(models.Cart.owner_id == user_id)
+        .all()
+    )
 
 
 def get_cart(db: Session, user_id: int):
@@ -271,8 +299,21 @@ def delete_cart(db: Session, item_id: int):
     return delete_cart
 
 
-def order(db: Session, user_id: int, cart_id: int, order: schemas.OrderCreate):
-    db_order = models.Order(**order.dict(), cart_id=cart_id, owner_id=user_id)
+def order(
+    db: Session,
+    user_id: int,
+    cart_id: int,
+    category_id: int,
+    item_id: int,
+    order: schemas.OrderCreate,
+):
+    db_order = models.Order(
+        **order.dict(),
+        cart_id=cart_id,
+        owner_id=user_id,
+        category_id=category_id,
+        item_id=item_id,
+    )
     db.add(db_order)
     db.commit()
     db.refresh(db_order)
@@ -280,8 +321,22 @@ def order(db: Session, user_id: int, cart_id: int, order: schemas.OrderCreate):
 
 
 def get_order(db: Session, user_id: int):
-    data = db.query(models.Order).filter(models.Order.owner_id == user_id).all()
-    return data
+    return (
+        db.query(
+            models.Order.id,
+            models.User.full_name,
+            models.Category.category_title,
+            models.Item.item_title,
+            models.Order.quantity,
+            models.Order.address,
+            models.Order.cart_id,
+        )
+        .select_from(models.Order)
+        .join(models.User)
+        .join(models.Category)
+        .filter(models.Order.owner_id == user_id)
+        .all()
+    )
 
 
 def bill(db: Session, owner_id: int, total: float):
@@ -327,10 +382,18 @@ def profiles(db: Session, skip: int = 0, limit: int = 100):
 
 def get_user_profile(db: Session, user_id: int):
     db_user = (
-        db.query(models.UserProfile)
+        db.query(
+            models.UserProfile.first_name,
+            models.UserProfile.last_name,
+            models.UserProfile.img_name,
+            models.UserProfile.img_url,
+        )
         .filter(models.UserProfile.user_id == user_id)
-        .first()
+        .all()
     )
+    for userprofile in db_user:
+        print(userprofile)
+
     return db_user
 
 
@@ -341,3 +404,28 @@ def delete_profile(db: Session, profile_id: int):
     db.delete(delete_profile)
     db.commit()
     return delete_profile
+
+
+def update_profile(
+    db: Session,
+    img_name: str,
+    img_url: str,
+    first_name: str,
+    last_name: str,
+    address: str,
+    user_id: str,
+    profile_id: int,
+):
+    update_category = (
+        db.query(models.UserProfile).filter(models.UserProfile.id == profile_id).first()
+    )
+    update_category.img_name = img_name
+    update_category.img_url = img_url
+    update_category.first_name = first_name
+    update_category.last_name = last_name
+    update_category.address = address
+    update_category.user_id = user_id
+
+    db.commit()
+    db.refresh(update_category)
+    return update_category
