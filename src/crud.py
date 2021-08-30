@@ -135,7 +135,7 @@ def get_item(db: Session, item_id: int):
         )
         .join(models.Category)
         .filter(models.Item.id == item_id)
-        .all()
+        .first()
     )
     return db_item
 
@@ -276,8 +276,12 @@ def get_carts(db: Session, user_id: int):
     )
 
 
-def get_cart(db: Session, user_id: int):
-    return db.query(models.Cart).filter(models.Cart.owner_id == user_id).first()
+def get_cart(db: Session, item_id: int, user_id: int):
+    return (
+        db.query(models.Cart)
+        .filter(models.Cart.item_id == item_id, models.Cart.owner_id == user_id)
+        .first()
+    )
 
 
 def get_cart_by_id(db: Session, cart_id: int):
