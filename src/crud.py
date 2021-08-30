@@ -135,7 +135,7 @@ def get_item(db: Session, item_id: int):
         )
         .join(models.Category)
         .filter(models.Item.id == item_id)
-        .first()
+        .all()
     )
     return db_item
 
@@ -323,24 +323,24 @@ def order(
 def get_order(db: Session, user_id: int):
     return (
         db.query(
-            models.Order.id,
-            models.User.full_name,
-            models.Category.category_title,
-            models.Item.item_title,
-            models.Order.quantity,
             models.Order.address,
+            models.Order.quantity,
+            models.Item.item_title,
+            models.Item.item_price,
+            models.Category.category_title,
             models.Order.cart_id,
         )
-        .select_from(models.Order)
-        .join(models.User)
-        .join(models.Category)
+        .filter(models.Item.id == models.Order.item_id)
+        .filter(models.Category.id == models.Order.category_id)
         .filter(models.Order.owner_id == user_id)
         .all()
     )
 
 
-def bill(db: Session, owner_id: int, total: float):
-    db_bill = models.Billing(total=total, owner_id=owner_id)
+def bill(db: Session, owner_id: int, total: float, category_id: int, item_id: int):
+    db_bill = models.Billing(
+        total=total, owner_id=owner_id, category_id=category_id, item_id=item_id
+    )
     db.add(db_bill)
     db.commit()
     db.refresh(db_bill)
@@ -348,7 +348,22 @@ def bill(db: Session, owner_id: int, total: float):
 
 
 def get_bill(db: Session, owner_id: int):
-    bill = db.query(models.Billing).filter(models.Billing.owner_id == owner_id).first()
+    bill = (
+        db.query(
+            models.Billing.id,
+            models.User.full_name,
+            models.Order.address,
+            models.Category.category_title,
+            models.Item.item_title,
+            models.Item.item_price,
+            models.Order.quantity,
+            models.Billing.total,
+        )
+        .filter(models.Item.id == models.Billing.item_id)
+        .filter(models.Category.id == models.Billing.category_id)
+        .filter(models.Billing.owner_id == owner_id)
+        .first()
+    )
     return bill
 
 

@@ -68,7 +68,10 @@ async def create_user(
         raise HTTPException(status_code=400, detail="Email already registered")
     user = crud.create_user(db=db, user=user)
     await send_email([user.email], user, db=db)
-    return user
+    raise HTTPException(
+        status_code=200,
+        detail=f"New user with user name {user.full_name} !!! has been created!!",
+    )
 
 
 @app.post("/super_user/", response_model=schemas.User, tags=["User"])
@@ -82,7 +85,10 @@ async def create_super_user(
         raise HTTPException(status_code=400, detail="Email already registered")
     user = crud.create_super_user(db=db, user=user)
     await send_email([user.email], user, db=db)
-    return user
+    raise HTTPException(
+        status_code=200,
+        detail=f"New user with user name {user.full_name} !!! has been created!!",
+    )
 
 
 templates = Jinja2Templates(directory=os.path.abspath(os.path.expanduser("templates")))
@@ -226,10 +232,10 @@ def update_user(
     )
     if update_user is None:
         raise HTTPException(status_code=404, detail="user not updated")
-    return update_user
+    return {"message": f"successfully updated the user with id: {user_id}"}
 
 
-@app.post("/users/{user_id}", response_model=schemas.Item, tags=["Item"])
+@app.post("/users/{user_id}", tags=["Item"])
 def create_item(
     category_id: int,
     item: schemas.ItemCreate,
@@ -252,7 +258,9 @@ def create_item(
         category_id=category_id,
     )
 
-    return datas
+    return {
+        "message": f"successfully created the item with id: {datas.id} and title: {datas.item_title}"
+    }
 
 
 @app.get("/items", tags=["Item"])
@@ -265,7 +273,7 @@ def get_items(
     items = crud.get_items(db, skip=skip, limit=limit)
     db_category = crud.get_categorys(db=db, skip=skip, limit=limit)
 
-    return db_category, items
+    return items
 
 
 @app.get("/item/{item_id}", tags=["Item"])
@@ -401,7 +409,7 @@ async def request_new_password(
     return [{"message": "New password has been set please sign in to continue"}]
 
 
-@app.post("/users/", response_model=schemas.Category, tags=["Category"])
+@app.post("/users/", tags=["Category"])
 def create_category(
     item: schemas.CategoryCreate,
     db: Session = Depends(get_db),
@@ -414,8 +422,10 @@ def create_category(
         raise HTTPException(status_code=404, detail="Only admins can create category")
 
     value = crud.create_category(db=db, user_id=current_user.id, category=item)
-    print(value.category_title)
-    return value
+
+    return {
+        "message": f"successfully created the category with id: {value.id} and title: {value.category_title}"
+    }
 
 
 @app.get("/categorys", response_model=List[schemas.Category], tags=["Category"])
@@ -479,7 +489,7 @@ def update_category(
     return {"message": f"successfully updated the category with id: {category_id}"}
 
 
-@app.post("/cart/{item_id}/", response_model=schemas.Cart, tags=["Cart"])
+@app.post("/cart/{item_id}/", tags=["Cart"])
 def add_to_cart(
     item_id: int,
     db: Session = Depends(get_db),
@@ -504,7 +514,7 @@ def add_to_cart(
         category_id=db_item[1],
         item_id=item_id,
     )
-    return cart
+    return {"message": f"successfully created the cart with id: {cart.id}"}
 
 
 @app.get("/cart", tags=["Cart"])
@@ -539,19 +549,23 @@ def delete_cart(
     raise HTTPException(status_code=404, detail="Cart not deleted or empty cart")
 
 
-@app.post("/order/{cart_id}/", response_model=schemas.Order, tags=["Order"])
+@app.post("/order/{cart_id}/", tags=["Order"])
 def Order(
     cart_id: int,
     order: schemas.OrderCreate,
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
+    current_user = get_current_user(db=db, token=token)
     data = crud.get_cart_by_id(cart_id=cart_id, db=db)
-    print(data)
+    if current_user.id != data.owner_id:
+        return HTTPException(
+            status_code=401,
+            detail="No item in the cart!! Please enter a valid cart ID!!",
+        )
+
     if data is None:
         raise HTTPException(status_code=401, detail="the cart does not exist")
-
-    current_user = get_current_user(db=db, token=token)
 
     order = crud.order(
         db=db,
@@ -561,7 +575,7 @@ def Order(
         category_id=data.category_id,
         item_id=data.item_id,
     )
-    return order
+    return {"message": f"successfully placed the order with id: {order.id}"}
 
 
 @app.get("/order/{order_id}", tags=["Order"])
@@ -577,7 +591,7 @@ def get_order(
     return order
 
 
-@app.post("/bill/", response_model=schemas.Bill, tags=["Bill"])
+@app.post("/bill/", tags=["Bill"])
 def create_bill(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
@@ -585,23 +599,23 @@ def create_bill(
 
     current_user = get_current_user(db=db, token=token)
     db_bill = crud.get_bill(db=db, owner_id=current_user.id)
-    if db_bill:
-        raise HTTPException(status_code=401, detail="Bill already exist")
+
     bill = 0
     order = crud.get_order(db=db, user_id=current_user.id)
     print(order)
     for value in order:
-        item = crud.get_cart_by_id(db=db, cart_id=value[4])
+        item = crud.get_cart_by_id(db=db, cart_id=value[5])
         print(item)
         item_price = crud.get_item(db=db, item_id=item.item_id)
-        print(item_price[4])
-        total = value.quantity * item_price[4]
+        print(item_price[5])
+        total = value.quantity * item_price[5]
         bill = bill + total
-
     data = crud.bill(
         db=db,
         owner_id=current_user.id,
         total=bill,
+        item_id=item.item_id,
+        category_id=item.category_id,
     )
     return data
 
