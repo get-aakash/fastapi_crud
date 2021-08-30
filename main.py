@@ -534,6 +534,7 @@ def view_cart(
     if current_user is None:
         raise HTTPException(status_code=404, detail="user does not exist")
     data = crud.get_carts(db=db, user_id=current_user.id)
+    print(data[1][0])
     return data
 
 
@@ -565,6 +566,8 @@ def Order(
 ):
     current_user = get_current_user(db=db, token=token)
     data = crud.get_cart_by_id(cart_id=cart_id, db=db)
+    if data is None:
+        raise HTTPException(status_code=404, detail="cart not found")
     if current_user.id != data.owner_id:
         return HTTPException(
             status_code=401,
@@ -573,7 +576,20 @@ def Order(
 
     if data is None:
         raise HTTPException(status_code=401, detail="the cart does not exist")
+    db_order = crud.get_orders(db=db, user_id=current_user.id)
+    if db_order is None:
+        order = crud.order(
+            db=db,
+            user_id=current_user.id,
+            cart_id=cart_id,
+            order=order,
+            category_id=data.category_id,
+            item_id=data.item_id,
+        )
+        return {"message": f"successfully placed the order with id: {order.id}"}
 
+    if db_order.owner_id & db_order.cart_id == cart_id & current_user.id:
+        return {"message": "The order is already placed"}
     order = crud.order(
         db=db,
         user_id=current_user.id,
@@ -585,7 +601,7 @@ def Order(
     return {"message": f"successfully placed the order with id: {order.id}"}
 
 
-@app.get("/order/{order_id}", tags=["Order"])
+@app.get("/order", tags=["Order"])
 def get_order(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
@@ -609,13 +625,15 @@ def create_bill(
 
     bill = 0
     order = crud.get_order(db=db, user_id=current_user.id)
-    print(order)
+
     for value in order:
-        item = crud.get_cart_by_id(db=db, cart_id=value[5])
-        print(item)
+        # print(value[0])
+        item = crud.get_cart_by_id(db=db, cart_id=value[0])
+        print(item.item_id)
+
         item_price = crud.get_item(db=db, item_id=item.item_id)
-        print(item_price[5])
-        total = value.quantity * item_price[5]
+
+        total = value.quantity * item_price[4]
         bill = bill + total
     data = crud.bill(
         db=db,

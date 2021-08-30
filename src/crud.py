@@ -265,7 +265,6 @@ def get_carts(db: Session, user_id: int):
             models.Item.item_title,
             models.Item.item_description,
             models.Item.item_price,
-            models.Item.id,
         )
         .select_from(models.Cart)
         .join(models.Category)
@@ -325,20 +324,34 @@ def order(
 
 
 def get_order(db: Session, user_id: int):
-    return (
-        db.query(
-            models.Order.address,
-            models.Order.quantity,
-            models.Item.item_title,
-            models.Item.item_price,
-            models.Category.category_title,
-            models.Order.cart_id,
+    data = db.query(models.Order).filter(models.Order.owner_id == user_id).all()
+    sample = []
+
+    for dbs in data:
+
+        value = (
+            db.query(
+                models.Category.category_title,
+                models.Item.item_title,
+                models.Item.item_description,
+                models.Item.item_price,
+            )
+            .join(models.Category)
+            .filter(models.Item.id == dbs.item_id)
+            .all()
         )
-        .filter(models.Item.id == models.Order.item_id)
-        .filter(models.Category.id == models.Order.category_id)
-        .filter(models.Order.owner_id == user_id)
-        .all()
-    )
+
+        # sample.append([dbs.id, value, dbs.address, dbs.quantity])
+        sample.append(dbs.id)
+        sample.append(value)
+
+        sample.append(dbs.address)
+
+    return sample
+
+
+def get_orders(db: Session, user_id: int):
+    return db.query(models.Order).filter(models.Order.owner_id == user_id).first()
 
 
 def bill(db: Session, owner_id: int, total: float, category_id: int, item_id: int):
