@@ -129,6 +129,7 @@ def get_item(db: Session, item_id: int):
         db.query(
             models.Category.category_title,
             models.Item.id,
+            models.Category.id,
             models.Item.item_title,
             models.Item.item_description,
             models.Item.item_price,
@@ -260,16 +261,12 @@ def get_carts(db: Session, user_id: int):
     return (
         db.query(
             models.Cart.id,
-            models.User.full_name,
-            models.Category.category_title,
             models.Item.item_title,
             models.Item.item_description,
             models.Item.item_price,
         )
         .select_from(models.Cart)
-        .join(models.Category)
         .join(models.Item)
-        .join(models.User)
         .filter(models.Cart.owner_id == user_id)
         .all()
     )
@@ -324,39 +321,53 @@ def order(
 
 
 def get_order(db: Session, user_id: int):
+
     data = db.query(models.Order).filter(models.Order.owner_id == user_id).all()
+
     sample = []
 
     for dbs in data:
 
         value = (
             db.query(
+                models.Order.id,
                 models.Category.category_title,
                 models.Item.item_title,
                 models.Item.item_description,
                 models.Item.item_price,
+                models.Order.quantity,
+                models.Order.address,
             )
+            .select_from(models.Order)
             .join(models.Category)
+            .filter(models.Order.id == dbs.id)
             .filter(models.Item.id == dbs.item_id)
             .all()
         )
 
-        # sample.append([dbs.id, value, dbs.address, dbs.quantity])
-        sample.append(dbs.id)
         sample.append(value)
 
-        sample.append(dbs.address)
-
-    return sample
+    return {"Items ordered": sample}
 
 
 def get_orders(db: Session, user_id: int):
-    return db.query(models.Order).filter(models.Order.owner_id == user_id).first()
+    return db.query(models.Order).filter(models.Order.owner_id == user_id).all()
 
 
-def bill(db: Session, owner_id: int, total: float, category_id: int, item_id: int):
+def bill(
+    db: Session,
+    owner_id: int,
+    total: float,
+    category_id: int,
+    item_id: int,
+    order_id: int,
+):
     db_bill = models.Billing(
-        total=total, owner_id=owner_id, category_id=category_id, item_id=item_id
+        total=total,
+        owner_id=owner_id,
+        category_id=category_id,
+        item_id=item_id,
+        order_id=order_id,
     )
     db.add(db_bill)
     db.commit()
@@ -364,24 +375,48 @@ def bill(db: Session, owner_id: int, total: float, category_id: int, item_id: in
     return db_bill
 
 
-def get_bill(db: Session, owner_id: int):
-    bill = (
-        db.query(
-            models.Billing.id,
-            models.User.full_name,
-            models.Order.address,
-            models.Category.category_title,
-            models.Item.item_title,
-            models.Item.item_price,
-            models.Order.quantity,
-            models.Billing.total,
+def get_bills(db: Session, user_id: int):
+    bills = 0
+    sample1 = []
+    sample = []
+    bill = db.query(models.Billing).filter(models.Billing.owner_id == user_id).all()
+    for b in bill:
+        value = (
+            db.query(
+                models.Order.id,
+                models.Category.category_title,
+                models.Item.item_title,
+                models.Item.item_description,
+                models.Item.item_price,
+                models.Order.quantity,
+                models.Order.address,
+            )
+            .select_from(models.Order)
+            .join(models.Category)
+            .filter(models.Order.id == b.id)
+            .filter(models.Item.id == b.item_id)
+            .all()
         )
-        .filter(models.Item.id == models.Billing.item_id)
-        .filter(models.Category.id == models.Billing.category_id)
-        .filter(models.Billing.owner_id == owner_id)
+        print(b.total)
+        bills = bills + b.total
+
+        sample1.append(value)
+    sample.append(bills)
+
+    return {"Items Purchased": sample1, "Total": f"Rs.{sample}"}
+
+
+def get_bill(db: Session, user_id: int, order_id: int):
+    return (
+        db.query(models.Billing)
+        .filter(models.Billing.owner_id == user_id)
+        .filter(models.Billing.order_id == order_id)
         .first()
     )
-    return bill
+
+
+def get_bill_By_order_id(db: Session, user_id: int, order_id: int):
+    return db.query(models.Billing).filter(models)
 
 
 def create_profile(

@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql.sqltypes import DECIMAL, DateTime
+from sqlalchemy.sql.sqltypes import DECIMAL, DateTime, Float
 from .database import Base
 
 
@@ -75,8 +75,8 @@ class Order(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     address = Column(String, index=True)
-    cart_id = Column(Integer, ForeignKey("carts.id"))
     quantity = Column(Integer, index=True)
+    cart_id = Column(Integer, ForeignKey("carts.id"))
     owner_id = Column(Integer, ForeignKey("users.id"))
     item_id = Column(Integer, ForeignKey("items.id"))
     category_id = Column(Integer, ForeignKey("categorys.id"))
@@ -87,9 +87,10 @@ class Billing(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
-    total = Column(DECIMAL, index=True)
+    total = Column(Float, index=True)
     item_id = Column(Integer, ForeignKey("items.id"))
     category_id = Column(Integer, ForeignKey("categorys.id"))
+    order_id = Column(Integer, ForeignKey("orders.id"))
 
 
 class UserProfile(Base):

@@ -133,6 +133,7 @@ class Order(OrderBase):
     owner_id: int
     item_id: int
     category_id: int
+    order_id: int
 
     class Config:
         orm_mode = True

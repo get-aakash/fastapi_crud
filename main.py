@@ -4,7 +4,6 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic.errors import DateError
 from pydantic.types import FilePath
-from sqlalchemy.sql.functions import current_user
 from starlette.responses import JSONResponse
 from pydantic.schema import schema
 from fastapi import BackgroundTasks, File, UploadFile
@@ -503,8 +502,8 @@ def add_to_cart(
         cart = crud.create_cart(
             db=db,
             user_id=current_user.id,
-            category_id=db_item[1],
-            item_id=item_id,
+            item_id=db_item[1],
+            category_id=db_item[2],
         )
         return {"message": "Item added to the cart"}
 
@@ -534,7 +533,7 @@ def view_cart(
     if current_user is None:
         raise HTTPException(status_code=404, detail="user does not exist")
     data = crud.get_carts(db=db, user_id=current_user.id)
-    print(data[1][0])
+
     return data
 
 
@@ -574,9 +573,10 @@ def Order(
             detail="No item in the cart!! Please enter a valid cart ID!!",
         )
 
-    if data is None:
-        raise HTTPException(status_code=401, detail="the cart does not exist")
     db_order = crud.get_orders(db=db, user_id=current_user.id)
+    for d in db_order:
+        if d.cart_id == cart_id:
+            return {"message": "The order is already placed"}
     if db_order is None:
         order = crud.order(
             db=db,
@@ -588,8 +588,6 @@ def Order(
         )
         return {"message": f"successfully placed the order with id: {order.id}"}
 
-    if db_order.owner_id & db_order.cart_id == cart_id & current_user.id:
-        return {"message": "The order is already placed"}
     order = crud.order(
         db=db,
         user_id=current_user.id,
@@ -608,50 +606,55 @@ def get_order(
 ):
     current_user = get_current_user(db=db, token=token)
     order = crud.get_order(db=db, user_id=current_user.id)
-    print(order)
+
     if order is None:
         raise HTTPException(status_code=404, detail="Order does not exist")
+
     return order
 
 
-@app.post("/bill/", tags=["Bill"])
+@app.post("/bill/{order_id}", tags=["Bill"])
 def create_bill(
+    order_id: int,
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
 
     current_user = get_current_user(db=db, token=token)
-    db_bill = crud.get_bill(db=db, owner_id=current_user.id)
+    db_bill = crud.get_bill(db=db, user_id=current_user.id, order_id=order_id)
+    print(db_bill)
 
-    bill = 0
-    order = crud.get_order(db=db, user_id=current_user.id)
+    db_order = crud.get_order_by_id(db=db, order_id=order_id)
+    item_price = crud.get_item(db=db, item_id=db_order.item_id)
 
-    for value in order:
-        # print(value[0])
-        item = crud.get_cart_by_id(db=db, cart_id=value[0])
-        print(item.item_id)
-
-        item_price = crud.get_item(db=db, item_id=item.item_id)
-
-        total = value.quantity * item_price[4]
-        bill = bill + total
+    if db_order.owner_id != current_user.id:
+        return HTTPException(
+            status_code=401,
+            detail="The Order ID is not valid. Please Enter the correct One",
+        )
+    if db_bill:
+        return {"message": f"The bill with bill id {db_bill.order_id} already exist!!"}
     data = crud.bill(
         db=db,
         owner_id=current_user.id,
-        total=bill,
-        item_id=item.item_id,
-        category_id=item.category_id,
+        total=db_order.quantity * item_price[5],
+        item_id=db_order.item_id,
+        category_id=db_order.category_id,
+        order_id=order_id,
     )
-    return data
+
+    bill = 0
+
+    return {"message": "Bill Created"}
 
 
-@app.get("/bill/{bill_id}", tags=["Bill"])
-def get_bill(
+@app.get("/bill/", tags=["Bill"])
+async def get_bill(
     db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme),
 ):
     current_user = get_current_user(db=db, token=token)
-    db_bill = crud.get_bill(db=db, owner_id=current_user.id)
+    db_bill = crud.get_bills(db=db, user_id=current_user.id)
     if db_bill is None:
         return HTTPException(status_code=401, detail="Bill does not exist")
     return db_bill
