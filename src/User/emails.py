@@ -9,8 +9,8 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from pydantic import BaseModel, EmailStr
 from typing import List
 from dotenv import dotenv_values
-from src.models import User
-from src import models
+from src.User.models import User
+from src.User import models
 from sqlalchemy.orm import Session
 import uuid
 import jwt
@@ -61,7 +61,7 @@ async def send_email(email: List, instance: User, db: Session):
     <!DOCTYPE html>
         <html>
             <body style="text-align:center;">
-                <a href="http://localhost:8000/verification/?id={token}">Verify your email</a>
+                <a href="http://localhost:8000/users/verification/?id={token}">Verify your email</a>
 	        </body>
         </html>
             """
@@ -102,38 +102,3 @@ async def forgot_password_email(reset_code: str, email: List):
     fm = FastMail(conf)
     await fm.send_message(message=message)
     return message
-
-
-async def send_email_async(subject: str, email_to: str, body: dict):
-    print(body)
-    message = MessageSchema(
-        subject=subject,
-        recipients=[email_to],
-        body=body["title"],
-        subtype="html",
-    )
-
-    fm = FastMail(conf)
-
-    await fm.send_message(message=message, template_name="email.html")
-
-
-html = """
-<p>Hi this test mail, thanks for using Fastapi-mail</p> 
-"""
-
-
-async def simple_send(email: EmailSchema) -> JSONResponse:
-
-    message = MessageSchema(
-        subject="Fastapi-Mail module",
-        recipients=email.dict().get(
-            "email"
-        ),  # List of recipients, as many as you can pass
-        body=html,
-        subtype="html",
-    )
-
-    fm = FastMail(conf)
-    await fm.send_message(message)
-    return JSONResponse(status_code=200, content={"message": "email has been sent"})
